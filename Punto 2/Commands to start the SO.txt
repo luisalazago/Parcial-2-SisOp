@@ -1,3 +1,0 @@
-sudo docker ps -a
-sudo docker start "Name of the image"
-sudo docker exec -ti "Name of the image" bash
