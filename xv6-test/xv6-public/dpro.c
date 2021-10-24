@@ -9,7 +9,9 @@
 int main(int argc, char *argv[]) {
     int pid;
     int k, n;
-    int x, z;
+    long long x, z;
+    long long temp = 2000000000;
+    long long temp2 = temp + temp;
 
     if(argc < 2) n = 1; // Default
     else n = atoi(argv[2]);
@@ -28,8 +30,11 @@ int main(int argc, char *argv[]) {
         }
         else {
             printf(1,"Child %d created\n",getpid());
-            for(z = 0; z < 4000000000; ++z) x = x + 3.14 * 89.64; //Useless calculation to consume CPU time
+            for(z = 0; z < temp2; ++z)
+                x = x + 3.14 * 89.64; //Useless calculation to consume CPU time
             break;
         }
     }
+
+    exit();
 }
