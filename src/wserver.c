@@ -14,12 +14,14 @@
 #define NUM 3
 #define SIZE (NUM * sizeof(int))
 #define lli long long int
+#define THREAD 10
 
 char default_root[] = ".";
 
 int lectura; //Flag para evitar el race condition
 sqlite3 *db; //Base de datos
-lli data[3]; //Datos a guardar en la memoria data[0] = pthread_t, data[1] = time init, data[2] = time_end
+
+lli data[THREAD][3]; //Datos a guardar en la memoria data[0] = pthread_t, data[1] = time init, data[2] = time_end
 
 static int callback(void *NotUsed, int argc, char **argv, char **azColNAme);
 
@@ -96,23 +98,32 @@ int main(int argc, char *argv[]) {
 	
 
     // now, get to work
+	time_t time_init[THREAD];
+	time_t time_end[THREAD];
+	pthread_t request[THREAD];
     int listen_fd = open_listen_fd_or_die(port);
 	pthread_t manager;
 	pthread_create(&manager, NULL, server_manager, NULL);
 
 	while (1) {
 		if(!lectura){
+			int i;
 			//Punto 2) crear un proceso que se encargue de una petición http
-			time_t time_init = time(NULL);
-			pthread_t request;
+			for(i = 0; i < THREAD; ++i){
 			//Creación de los procesos htpps que llegan
-			pthread_create(&request, NULL, http_thread, (int *) &listen_fd);
+				time_init[i] = time(NULL);
+				pthread_create(&request[i], NULL, http_thread, (int *) &listen_fd);
+			}
 			//Proceso padre
-			pthread_join(request, NULL);
-			time_t time_end = time(NULL);
-			printf("Termine el proceso Hijo nro: ");
-			printf(" %lld\n\n", request);
-			data[0] = (lli) request; data[1] = (lli) time_init; data[2] = (lli) time_end;
+			//Creación de los procesos htpps que llegan
+			//Proceso padre
+			for(i = 0; i < THREAD; ++i){
+				pthread_join(request[i], NULL);
+				time_end[i] = time(NULL);
+				printf("Termine el proceso Hijo nro: ");
+				printf(" %lld\n\n", request[i]);
+				data[i][0] = (lli) request[i]; data[i][1] = (lli) time_init[i]; data[i][2] = (lli) time_end[i];
+			}
 			lectura = 1;
 		}
 	}
@@ -129,7 +140,7 @@ static int callback(void *NotUsed, int argc, char **argv, char **azColNAme){
 	return 0;
 }
 
-int insert_database(){
+int insert_database(int i){
 	char *err_msg = 0;
 	int rc;
 
@@ -151,7 +162,7 @@ int insert_database(){
 	// }
 
 	char sql_i[500];
-	sprintf(sql_i, "INSERT INTO Request (pid, time_init, time_end) VALUES(%lld, %lld, %lld);", data[0], data[1], data[2]);
+	sprintf(sql_i, "INSERT INTO Request (pid, time_init, time_end) VALUES(%lld, %lld, %lld);", data[i][0], data[i][1], data[i][2]);
 	rc= sqlite3_exec(db, sql_i, callback, 0, &err_msg);
 	printf("Estoy revisando el insert %d\n", rc);
 	printf("Y el mensaj es %s\n", sql_i);
@@ -167,8 +178,11 @@ int insert_database(){
 void *server_manager(void* args){
 	while(1){
 		if(lectura){
-			if(!insert_database())
-				printf("get data succesefull\n");
+			int i;
+			for(i = 0; i < THREAD; ++i){
+				if(!insert_database(i))
+					printf("get data succesefull\n");
+			}
 			lectura = 0;
 		}
 	}
@@ -183,4 +197,5 @@ void *http_thread(void* args){
 	int conn_fd = accept_or_die(listen_fd, (sockaddr_t *) &client_addr, (socklen_t *) &client_len);
 	request_handle(conn_fd);
 	close_or_die(conn_fd);
+	pthread_exit(0);
 }
